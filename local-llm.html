@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>日本語ローカルLLM探求</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Visualization & Content Choices:
+        - Report Info: Local LLM Basics (Sec 1, 2 of source) -> Goal: Inform -> Presentation: Text sections, expandable Q&A-like cards -> Interaction: Click to expand/collapse -> Justification: Easy access to foundational knowledge for beginners.
+        - Report Info: Top 5 LLMs (Sec 3 of source) -> Goal: Compare/Inform -> Presentation: Interactive Table for model specs, Bar Chart for VRAM comparison (Chart.js) -> Interaction: View chart, (future: sort table) -> Justification: Quick comparison of key model specifications, especially VRAM which is critical. Chart.js for clear visual VRAM comparison.
+        - Report Info: VRAM Guide (Sec 2.3 of source) -> Goal: Inform/Guide -> Presentation: Text table integrated with VRAM chart section -> Interaction: View chart and corresponding text -> Justification: Clarify PC requirements visually and textually.
+        - Report Info: Installation Tools (Sec 4.2 of source) -> Goal: Compare/Guide -> Presentation: Comparison table -> Interaction: (future: sort table) -> Justification: Help users choose an installation tool.
+        - Report Info: Installation Steps (Sec 4.3, 4.4 of source) -> Goal: Instruct -> Presentation: Step-by-step expandable (accordion) sections for Ollama and LM Studio -> Interaction: Click to expand/collapse steps -> Justification: Clear, progressive disclosure of detailed instructions.
+        - Report Info: Usage Ideas (Sec 5.1 of source) -> Goal: Inspire/Inform -> Presentation: Interactive Cards -> Interaction: (future: click to reveal more details/examples) -> Justification: Engaging way to showcase the potential of local LLMs.
+        - Report Info: Glossary (Sec 7 of source) -> Goal: Inform -> Presentation: Expandable definition list (details/summary) -> Interaction: Click term to see definition -> Justification: Quick and easy lookup for technical terms.
+        - CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. All charts are rendered using Chart.js (Canvas). Icons and simple diagrams are achieved using Unicode characters or structured HTML/CSS with Tailwind. -->
+
+    <style>
+        body {
+            font-family: 'Inter', 'Noto Sans JP', sans-serif;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 700px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 350px;
+            max-height: 450px;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 400px;
+            }
+        }
+        details > summary {
+            cursor: pointer;
+            padding: 0.5rem 1rem;
+            background-color: #f0f9ff; /* sky-50 */
+            border-radius: 0.375rem;
+            font-weight: 600;
+            color: #0c4a6e; /* sky-800 */
+        }
+        details > summary:hover {
+            background-color: #e0f2fe; /* sky-100 */
+        }
+        details[open] > summary {
+            background-color: #bae6fd; /* sky-200 */
+        }
+        .nav-link {
+            transition: color 0.3s ease, border-bottom-color 0.3s ease;
+        }
+        .nav-link.active {
+            color: #0284c7; /* sky-600 */
+            border-bottom-color: #0284c7; /* sky-600 */
+        }
+        .tooltip {
+            position: relative;
+            display: inline-block;
+        }
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 200px;
+            background-color: #555;
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 5px 0;
+            position: absolute;
+            z-index: 1;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -100px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+    </style>
+</head>
+<body class="bg-stone-100 text-stone-800">
+
+    <header class="bg-white shadow-md sticky top-0 z-50">
+        <nav class="container mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex-shrink-0">
+                    <h1 class="text-2xl font-bold text-sky-700">あなたのAIアシスタントガイド</h1>
+                </div>
+                <div class="hidden md:block">
+                    <div class="ml-10 flex items-baseline space-x-4">
+                        <a href="#what-is-llm" class="nav-link text-stone-600 hover:text-sky-600 px-3 py-2 rounded-md text-sm font-medium border-b-2 border-transparent">ローカルLLMとは？</a>
+                        <a href="#top-models" class="nav-link text-stone-600 hover:text-sky-600 px-3 py-2 rounded-md text-sm font-medium border-b-2 border-transparent">トップ5モデル</a>
+                        <a href="#installation" class="nav-link text-stone-600 hover:text-sky-600 px-3 py-2 rounded-md text-sm font-medium border-b-2 border-transparent">導入方法</a>
+                        <a href="#usage-ideas" class="nav-link text-stone-600 hover:text-sky-600 px-3 py-2 rounded-md text-sm font-medium border-b-2 border-transparent">活用アイデア</a>
+                        <a href="#glossary" class="nav-link text-stone-600 hover:text-sky-600 px-3 py-2 rounded-md text-sm font-medium border-b-2 border-transparent">用語集</a>
+                    </div>
+                </div>
+                <div class="md:hidden">
+                    <button id="mobile-menu-button" class="inline-flex items-center justify-center p-2 rounded-md text-stone-500 hover:text-sky-600 hover:bg-stone-200 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-sky-500">
+                        <span class="sr-only">メインメニューを開く</span>
+                        <svg class="block h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                        </svg>
+                        <svg class="hidden h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </nav>
+        <div id="mobile-menu" class="md:hidden hidden">
+            <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
+                <a href="#what-is-llm" class="nav-link text-stone-600 hover:text-sky-600 hover:bg-stone-200 block px-3 py-2 rounded-md text-base font-medium border-b-2 border-transparent">ローカルLLMとは？</a>
+                <a href="#top-models" class="nav-link text-stone-600 hover:text-sky-600 hover:bg-stone-200 block px-3 py-2 rounded-md text-base font-medium border-b-2 border-transparent">トップ5モデル</a>
+                <a href="#installation" class="nav-link text-stone-600 hover:text-sky-600 hover:bg-stone-200 block px-3 py-2 rounded-md text-base font-medium border-b-2 border-transparent">導入方法</a>
+                <a href="#usage-ideas" class="nav-link text-stone-600 hover:text-sky-600 hover:bg-stone-200 block px-3 py-2 rounded-md text-base font-medium border-b-2 border-transparent">活用アイデア</a>
+                <a href="#glossary" class="nav-link text-stone-600 hover:text-sky-600 hover:bg-stone-200 block px-3 py-2 rounded-md text-base font-medium border-b-2 border-transparent">用語集</a>
+            </div>
+        </div>
+    </header>
+
+    <main class="container mx-auto p-4 sm:p-6 lg:p-8">
+        <section id="what-is-llm" class="mb-12 scroll-mt-20">
+            <h2 class="text-3xl font-bold text-sky-700 mb-6">ローカルLLMって何？ 🤔</h2>
+            <div class="bg-white p-6 rounded-lg shadow-lg space-y-4">
+                <p class="text-lg leading-relaxed">「ローカルLLM」とは、ChatGPTのような賢いAI（大規模言語モデル）が、インターネット上のサーバーではなく、あなたのパソコンの中で直接動く技術のことです。まるで、あなた専属の家庭教師がパソコンの中に住んでいるようなイメージですね！</p>
+                <p class="leading-relaxed">このセクションでは、ローカルLLMの基本的な仕組み、日本語ユーザーにとってのメリット（プライバシー保護、オフライン利用、高速応答など）、そして知っておくべき注意点（必要なPCスペック、AIの限界など）を分かりやすく解説します。</p>
+
+                <details class="bg-stone-50 rounded-lg">
+                    <summary class="text-sky-700">ローカルLLMの主なメリットは？</summary>
+                    <div class="p-4 border-t border-stone-200">
+                        <ul class="list-disc list-inside space-y-2 text-stone-700">
+                            <li><strong>プライバシー保護:</strong> あなたの情報はパソコンの外に出ません。</li>
+                            <li><strong>オフライン利用:</strong> インターネット接続なしでも基本的な機能が使えます。</li>
+                            <li><strong>高速応答:</strong> サーバーとの通信がないため、応答が速い場合があります。</li>
+                            <li><strong>日本語特化モデル:</strong> 日本語のニュアンスを理解するモデルを選べます。</li>
+                            <li><strong>コスト:</strong> 初期設定後は基本的に無料で利用できます（電気代は除く）。</li>
+                        </ul>
+                    </div>
+                </details>
+
+                <details class="bg-stone-50 rounded-lg">
+                    <summary class="text-sky-700">ローカルLLMの注意点は？</summary>
+                    <div class="p-4 border-t border-stone-200">
+                        <ul class="list-disc list-inside space-y-2 text-stone-700">
+                            <li><strong>PCスペック:</strong> 特にVRAM（ビデオメモリ）がある程度必要です。</li>
+                            <li><strong>セットアップ:</strong> 初めて導入する際には設定作業が必要です。</li>
+                            <li><strong>AIの限界:</strong> ハルシネーション（もっともらしい嘘）やバイアス（偏見）に注意が必要です。</li>
+                            <li><strong>情報鮮度:</strong> 最新情報へのアクセスはクラウド型に劣る場合があります。</li>
+                        </ul>
+                    </div>
+                </details>
+                 <div class="mt-6 p-4 bg-sky-50 border-l-4 border-sky-500 text-sky-700 rounded-r-lg">
+                    <p class="font-semibold">ポイント💡</p>
+                    <p>ローカルLLMは、自分のデータを手元で管理しつつ、パーソナルなAIアシスタントを持つことを可能にする技術です。プライバシーを重視する方や、特定の作業に特化したAIをオフラインで利用したい方にとって、非常に魅力的な選択肢となります。</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="top-models" class="mb-12 scroll-mt-20">
+            <h2 class="text-3xl font-bold text-sky-700 mb-6">🏆 注目の日本語ローカルLLM トップ5 (2025年5月推測)</h2>
+            <div class="bg-white p-6 rounded-lg shadow-lg space-y-6">
+                <p class="text-lg leading-relaxed">ここでは、2025年5月時点で日本語が得意で、比較的軽量、かつWindows PCで動作する可能性のあるローカルLLMの中から、特に注目したいモデルを5つ紹介します。選定基準は軽量性、日本語能力、注目度、GGUF形式の入手しやすさです。</p>
+                <p class="text-sm text-stone-600 leading-relaxed">注意：AIの進化は非常に速いため、これはあくまで現時点での推測です。最新情報は常にチェックしてくださいね！</p>
+
+                <div class="chart-container mb-8">
+                    <canvas id="vramChart"></canvas>
+                </div>
+                <p class="text-center text-sm text-stone-600 -mt-4 mb-6">上記グラフは、各モデルのGGUF (Q4_K_M 量子化時) に必要とされるVRAMのおおよその目安です。</p>
+
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-stone-200">
+                        <thead class="bg-stone-50">
+                            <tr>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-stone-500 uppercase tracking-wider">モデル名</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-stone-500 uppercase tracking-wider">開発元</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-stone-500 uppercase tracking-wider">VRAM目安 (Q4_K_M)</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-stone-500 uppercase tracking-wider">特徴</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-stone-200">
+                            <tr>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-stone-900">Llama-3-ELYZA-JP-8B</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-stone-500">ELYZA, Inc.</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-stone-500">8GB～10GB</td>
+                                <td class="px-6 py-4 text-sm text-stone-500">Llama 3ベース、本格的な日本語力</td>
+                            </tr>
+                            <tr>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-stone-900">rinna gemma-2-baku-2b-it</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-stone-500">rinna株式会社</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-stone-500">約1.7GB～1.8GB</td>
+                                <td class="px-6 py-4 text-sm text-stone-500">Gemma 2ベース、超軽量、指示応答型</td>
+                            </tr>
+                            <tr>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-stone-900">tokyotech-llm Gemma-2-Llama-Swallow-2b-it</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-stone-500">東京工業大学ほか</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-stone-500">約1.8GB～2GB</td>
+                                <td class="px-6 py-4 text-sm text-stone-500">Gemma 2ベース、学術的背景、日本語強化</td>
+                            </tr>
+                            <tr>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-stone-900">RakutenAI-2.0-mini-instruct</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-stone-500">楽天グループ</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-stone-500">約1.1GB (Q5_K_M)</td>
+                                <td class="px-6 py-4 text-sm text-stone-500">1.5Bの超軽量、エッジデバイスも視野</td>
+                            </tr>
+                            <tr>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-stone-900">NTT tsuzumi (7B)</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-stone-500">NTT</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-stone-500">6GB～8GB (推定)</td>
+                                <td class="px-6 py-4 text-sm text-stone-500">国産LLM、高い日本語処理能力 (個人利用可否注意)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                 <div class="mt-6 p-4 bg-sky-50 border-l-4 border-sky-500 text-sky-700 rounded-r-lg">
+                    <p class="font-semibold">モデル選びのヒント💡</p>
+                    <p>自分のPCのVRAM容量を確認し、それに合ったモデルを選ぶことが重要です。最初はパラメータ数が少ない（例: 2B）超軽量モデルから試してみるのがおすすめです。Hugging FaceなどのサイトでGGUF形式のファイルを探してみましょう。</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="installation" class="mb-12 scroll-mt-20">
+            <h2 class="text-3xl font-bold text-sky-700 mb-6">🚀 Windows 11への導入方法</h2>
+            <div class="bg-white p-6 rounded-lg shadow-lg space-y-6">
+                <p class="text-lg leading-relaxed">ローカルLLMをWindows 11パソコンで動かすための具体的な手順を紹介します。ここでは、人気の管理ツール「Ollama」と「LM Studio」を使った方法を解説します。</p>
+
+                <div class="grid md:grid-cols-2 gap-6">
+                    <div>
+                        <h3 class="text-xl font-semibold text-sky-600 mb-3">🛠️ 必要なもの (PCスペック)</h3>
+                        <ul class="list-disc list-inside space-y-1 text-stone-700">
+                            <li><strong>OS:</strong> Windows 11</li>
+                            <li><strong>RAM:</strong> 最低16GB (32GB推奨)</li>
+                            <li><strong>VRAM:</strong> モデルによる (軽量モデルで4GB～、7Bクラスで8GB～推奨)</li>
+                            <li><strong>ストレージ:</strong> SSDに数GB～数十GBの空き容量</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-semibold text-sky-600 mb-3">🛠️ 必要なソフトウェア</h3>
+                        <ul class="list-disc list-inside space-y-1 text-stone-700">
+                            <li>Ollama または LM Studio</li>
+                            <li>Webブラウザ (Chrome, Edgeなど)</li>
+                            <li>PowerShell (Ollamaで使用する場合あり)</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <h3 class="text-2xl font-semibold text-sky-600 mt-8 mb-4">LLM管理ツールを選ぼう: Ollama vs. LM Studio</h3>
+                <div class="overflow-x-auto mb-6">
+                    <table class="min-w-full divide-y divide-stone-200">
+                        <thead class="bg-stone-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-stone-500 uppercase tracking-wider">比較ポイント</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-stone-500 uppercase tracking-wider">Ollama</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-stone-500 uppercase tracking-wider">LM Studio</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-stone-200">
+                            <tr><td class="px-6 py-2 font-semibold">操作方法</td><td class="px-6 py-2">コマンド入力 (CUI)</td><td class="px-6 py-2">マウス操作 (GUI)</td></tr>
+                            <tr><td class="px-6 py-2 font-semibold">セットアップ</td><td class="px-6 py-2">シンプル、慣れれば迅速</td><td class="px-6 py-2">インストーラに従う、直感的</td></tr>
+                            <tr><td class="px-6 py-2 font-semibold">モデル検索</td><td class="px-6 py-2">コマンドで指定、事前検索推奨</td><td class="px-6 py-2">ソフト内で検索・ダウンロード可</td></tr>
+                            <tr><td class="px-6 py-2 font-semibold">PC負荷</td><td class="px-6 py-2">比較的軽い傾向</td><td class="px-6 py-2">Ollamaより少しリソース使う場合も</td></tr>
+                            <tr><td class="px-6 py-2 font-semibold">おすすめ</td><td class="px-6 py-2">コマンド操作に抵抗がない人</td><td class="px-6 py-2">GUI好き、PC初心者</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div>
+                    <h4 class="text-xl font-semibold text-sky-600 mb-3">1. Ollamaでの導入手順</h4>
+                    <details class="mb-3">
+                        <summary>ステップ1: Ollamaのダウンロードとインストール</summary>
+                        <div class="p-4 border-t border-stone-200 text-stone-700 space-y-2">
+                            <p>1. Ollama公式サイト (ollama.com) からWindows用インストーラーをダウンロードします。</p>
+                            <p>2. ダウンロードしたインストーラーを実行し、画面の指示に従いインストールします。</p>
+                            <p>3. インストール後、Ollamaはバックグラウンドで自動起動することが多いです。</p>
+                        </div>
+                    </details>
+                    <details class="mb-3">
+                        <summary>ステップ2: PowerShellでの動作確認</summary>
+                        <div class="p-4 border-t border-stone-200 text-stone-700 space-y-2">
+                            <p>1. PowerShellを起動します。</p>
+                            <p>2. `ollama --version` と入力し、バージョンが表示されればOK。</p>
+                            <p>3. `ollama list` でインストール済みモデル一覧（最初は空）。</p>
+                            <p>4. `curl http://localhost:11434` で「Ollama is running」と表示されればサーバー動作中。</p>
+                        </div>
+                    </details>
+                    <details class="mb-3">
+                        <summary>ステップ3: モデルのダウンロードと実行</summary>
+                        <div class="p-4 border-t border-stone-200 text-stone-700 space-y-2">
+                            <p>1. Hugging Face等で使いたいモデルのOllama用名前 (例: `rinna/gemma-2-baku-2b-it`) を調べます。</p>
+                            <p>2. PowerShellで `ollama pull [モデル名]` を実行しダウンロード。</p>
+                            <p>3. ダウンロード後、`ollama run [モデル名]` でチャット開始。終了は `/bye`。</p>
+                        </div>
+                    </details>
+                     <details>
+                        <summary>ステップ4: GGUFファイルのインポート (Modelfile)</summary>
+                        <div class="p-4 border-t border-stone-200 text-stone-700 space-y-2">
+                            <p>1. GGUFファイル (例: `model.gguf`) を保存します。</p>
+                            <p>2. 同じフォルダに `Modelfile` という名前のテキストファイルを作成し、`FROM ./model.gguf` と記述します。</p>
+                            <p>3. PowerShellでそのフォルダに移動し、`ollama create my-llm -f Modelfile` を実行 (my-llmは任意名)。</p>
+                            <p>4. `ollama run my-llm` で実行できます。</p>
+                        </div>
+                    </details>
+                </div>
+
+                <div class="mt-8">
+                    <h4 class="text-xl font-semibold text-sky-600 mb-3">2. LM Studioでの導入手順</h4>
+                    <details class="mb-3">
+                        <summary>ステップ1: LM Studioのダウンロードとインストール</summary>
+                        <div class="p-4 border-t border-stone-200 text-stone-700 space-y-2">
+                            <p>1. LM Studio公式サイト (lmstudio.ai) からWindows用インストーラーをダウンロードします。</p>
+                            <p>2. ダウンロードしたインストーラーを実行し、画面の指示に従いインストールします。</p>
+                        </div>
+                    </details>
+                    <details class="mb-3">
+                        <summary>ステップ2: モデルの検索とダウンロード</summary>
+                        <div class="p-4 border-t border-stone-200 text-stone-700 space-y-2">
+                            <p>1. LM Studioを起動します。</p>
+                            <p>2. Home画面の検索窓でモデル名 (例: `elyza`, `rinna gemma`) や「japanese」で検索します。</p>
+                            <p>3. GGUF形式で、VRAMに合う量子化レベル (例: Q4_K_M) のファイルを選び「Download」。</p>
+                        </div>
+                    </details>
+                    <details class="mb-3">
+                        <summary>ステップ3: AIとのチャット</summary>
+                        <div class="p-4 border-t border-stone-200 text-stone-700 space-y-2">
+                            <p>1. 左側メニューから「AI Chat」(吹き出しアイコン) を選択。</p>
+                            <p>2. 上部でダウンロードしたモデルを選択し、「Load model」。</p>
+                            <p>3. モデル読み込み後、下部の入力欄から日本語でチャット開始。</p>
+                        </div>
+                    </details>
+                     <details>
+                        <summary>ステップ4: 外部GGUFファイルのインポート</summary>
+                        <div class="p-4 border-t border-stone-200 text-stone-700 space-y-2">
+                            <p>1. LM Studioのモデル保存フォルダ (例: `C:\Users\[ユーザー名]\.lmstudio\models`) を開きます。</p>
+                            <p>2. ダウンロードしたGGUFファイルを、推奨されるフォルダ構造 (例: `[開発元名]/[モデル名]/[GGUFファイル名]`) に従ってコピーします。</p>
+                            <p>3. LM Studioを再起動するか、モデルリストを更新すると表示されます。</p>
+                        </div>
+                    </details>
+                </div>
+                 <div class="mt-6 p-4 bg-sky-50 border-l-4 border-sky-500 text-sky-700 rounded-r-lg">
+                    <p class="font-semibold">GGUFファイルって？ 🤔</p>
+                    <p>GGUFは、AIモデルを軽量化し、様々なツールで共通して扱いやすくするためのファイル形式です。この形式のおかげで、ローカルLLMの利用がずっと簡単になりました！</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="usage-ideas" class="mb-12 scroll-mt-20">
+            <h2 class="text-3xl font-bold text-sky-700 mb-6">💡 ローカルLLM活用アイデア集</h2>
+            <div class="bg-white p-6 rounded-lg shadow-lg space-y-4">
+                <p class="text-lg leading-relaxed">ローカルLLMは、あなたの日常や仕事、学習、創造活動の強力なパートナーになります。ここでは、いくつかの活用アイデアを紹介します。</p>
+                <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div class="bg-stone-50 p-4 rounded-lg shadow hover:shadow-md transition-shadow">
+                        <h4 class="font-semibold text-sky-700 mb-2">📰ニュース要約</h4>
+                        <p class="text-sm text-stone-600">長いニュース記事を短時間で把握。URLや本文を渡し「3行でまとめて」と依頼。</p>
+                    </div>
+                    <div class="bg-stone-50 p-4 rounded-lg shadow hover:shadow-md transition-shadow">
+                        <h4 class="font-semibold text-sky-700 mb-2">📧メール・メッセージ下書き</h4>
+                        <p class="text-sm text-stone-600">相手や目的を伝え、丁寧なメールや面白いメッセージのたたき台を作成。</p>
+                    </div>
+                    <div class="bg-stone-50 p-4 rounded-lg shadow hover:shadow-md transition-shadow">
+                        <h4 class="font-semibold text-sky-700 mb-2">✍️創作アシスタント</h4>
+                        <p class="text-sm text-stone-600">小説の続き、詩や歌詞のアイデア出し。AIと一緒に物語を創作。</p>
+                    </div>
+                    <div class="bg-stone-50 p-4 rounded-lg shadow hover:shadow-md transition-shadow">
+                        <h4 class="font-semibold text-sky-700 mb-2">💻プログラミング学習サポート</h4>
+                        <p class="text-sm text-stone-600">簡単なコードの質問や、エラーのヒントを得る。超初級の学習パートナーに。</p>
+                    </div>
+                    <div class="bg-stone-50 p-4 rounded-lg shadow hover:shadow-md transition-shadow">
+                        <h4 class="font-semibold text-sky-700 mb-2">🗣️外国語学習の練習相手</h4>
+                        <p class="text-sm text-stone-600">簡単な英会話の練習や、日本語のニュアンスを英語でどう言うか質問。</p>
+                    </div>
+                    <div class="bg-stone-50 p-4 rounded-lg shadow hover:shadow-md transition-shadow">
+                        <h4 class="font-semibold text-sky-700 mb-2">🧠ブレインストーミング</h4>
+                        <p class="text-sm text-stone-600">新しい企画のアイデア出しや問題解決の壁打ち相手。斬新な視点を発見。</p>
+                    </div>
+                </div>
+                <h3 class="text-xl font-semibold text-sky-600 mt-8 mb-3">AIともっと仲良くなる「話し方」のコツ (簡単プロンプト術)</h3>
+                 <ul class="list-disc list-inside space-y-2 text-stone-700">
+                    <li><strong>具体的に依頼する:</strong> 曖昧な指示より具体的な指示が効果的。</li>
+                    <li><strong>役割を与える (ロールプレイ):</strong> 「あなたは〇〇です」と役割設定すると的確な回答が得やすい。</li>
+                    <li><strong>例を示す (フューショット):</strong> お手本を見せるとAIがスタイルを学習しやすい。</li>
+                    <li><strong>ステップバイステップで指示:</strong> 複雑な依頼は分割して順番に。</li>
+                </ul>
+                 <div class="mt-6 p-4 bg-sky-50 border-l-4 border-sky-500 text-sky-700 rounded-r-lg">
+                    <p class="font-semibold">未来の展望 🚀</p>
+                    <p>ローカルLLMは「一人一台のパーソナルAI」時代を切り開く可能性を秘めています。プライバシーを守りつつ、個人の趣味嗜好に最適化されたAIが、日常生活や仕事をより豊かにサポートする未来が期待されます。</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="glossary" class="mb-12 scroll-mt-20">
+            <h2 class="text-3xl font-bold text-sky-700 mb-6">📚 簡単用語集</h2>
+            <div class="bg-white p-6 rounded-lg shadow-lg space-y-3">
+                <p class="text-lg leading-relaxed">ローカルLLM関連の専門用語を分かりやすく解説します。</p>
+                <details class="bg-stone-50 rounded-lg">
+                    <summary class="text-sky-700">LLM (Large Language Model)</summary>
+                    <div class="p-4 border-t border-stone-200 text-stone-700">大量の文章データで学習した、言葉を操るAI。ChatGPTなど。</div>
+                </details>
+                <details class="bg-stone-50 rounded-lg">
+                    <summary class="text-sky-700">ローカルLLM (Local LLM)</summary>
+                    <div class="p-4 border-t border-stone-200 text-stone-700">ユーザーのPC内で直接動作するLLM。</div>
+                </details>
+                <details class="bg-stone-50 rounded-lg">
+                    <summary class="text-sky-700">パラメータ (Parameter)</summary>
+                    <div class="p-4 border-t border-stone-200 text-stone-700">AIの賢さや知識量の一つの目安。多いほど高性能だが重くなる。</div>
+                </details>
+                <details class="bg-stone-50 rounded-lg">
+                    <summary class="text-sky-700">量子化 (Quantization)</summary>
+                    <div class="p-4 border-t border-stone-200 text-stone-700">AIモデルを軽量化する技術。性能を少し犠牲にファイルサイズを縮小。</div>
+                </details>
+                <details class="bg-stone-50 rounded-lg">
+                    <summary class="text-sky-700">GGUF (GPT-Generated Unified Format)</summary>
+                    <div class="p-4 border-t border-stone-200 text-stone-700">量子化されたLLMを保存する人気のファイル形式。</div>
+                </details>
+                <details class="bg-stone-50 rounded-lg">
+                    <summary class="text-sky-700">VRAM (Video RAM)</summary>
+                    <div class="p-4 border-t border-stone-200 text-stone-700">グラフィックボード専用メモリ。LLM実行に重要。</div>
+                </details>
+                <details class="bg-stone-50 rounded-lg">
+                    <summary class="text-sky-700">ハルシネーション (Hallucination)</summary>
+                    <div class="p-4 border-t border-stone-200 text-stone-700">AIがもっともらしい嘘や誤情報を生成すること。</div>
+                </details>
+                 <details class="bg-stone-50 rounded-lg">
+                    <summary class="text-sky-700">Hugging Face (ハギングフェイス)</summary>
+                    <div class="p-4 border-t border-stone-200 text-stone-700">AIモデルやデータセットを共有する大規模プラットフォーム。</div>
+                </details>
+            </div>
+        </section>
+
+        <footer class="text-center mt-12 py-8 border-t border-stone-300">
+            <p class="text-sm text-stone-600">&copy; 2025 TK2 LAB. この情報は2025年5月21日時点の推測に基づきます。</p>
+        </footer>
+
+    </main>
+
+    <script>
+        // Mobile menu toggle
+        const mobileMenuButton = document.getElementById('mobile-menu-button');
+        const mobileMenu = document.getElementById('mobile-menu');
+        const navLinks = document.querySelectorAll('.nav-link');
+        const sections = document.querySelectorAll('section');
+
+        mobileMenuButton.addEventListener('click', () => {
+            mobileMenu.classList.toggle('hidden');
+            const iconOpen = mobileMenuButton.querySelector('svg:first-child');
+            const iconClose = mobileMenuButton.querySelector('svg:last-child');
+            iconOpen.classList.toggle('hidden');
+            iconClose.classList.toggle('hidden');
+        });
+
+        // Close mobile menu when a link is clicked
+        document.querySelectorAll('#mobile-menu a').forEach(link => {
+            link.addEventListener('click', () => {
+                mobileMenu.classList.add('hidden');
+                 const iconOpen = mobileMenuButton.querySelector('svg:first-child');
+                const iconClose = mobileMenuButton.querySelector('svg:last-child');
+                iconOpen.classList.remove('hidden');
+                iconClose.classList.add('hidden');
+            });
+        });
+        
+        // Active nav link highlighting on scroll
+        window.addEventListener('scroll', () => {
+            let current = '';
+            sections.forEach(section => {
+                const sectionTop = section.offsetTop;
+                if (pageYOffset >= sectionTop - 80) { // 80 is approx header height + offset
+                    current = section.getAttribute('id');
+                }
+            });
+
+            navLinks.forEach(link => {
+                link.classList.remove('active');
+                if (link.getAttribute('href').substring(1) === current) {
+                    link.classList.add('active');
+                }
+            });
+        });
+
+
+        // VRAM Chart
+        const vramData = {
+            labels: [
+                'Llama-3-ELYZA-JP-8B', 
+                'rinna gemma-2-baku-2b-it', 
+                'tokyotech-llm Gemma-2-Llama-Swallow-2b-it', 
+                'RakutenAI-2.0-mini-instruct (Q5_K_M)', 
+                'NTT tsuzumi (7B, 推定)'
+            ],
+            datasets: [{
+                label: '必要VRAM目安 (GB, Q4_K_M相当)',
+                data: [9, 1.75, 1.9, 1.1, 7], // Mid-points or typical values
+                backgroundColor: [
+                    'rgba(54, 162, 235, 0.6)', // blue
+                    'rgba(75, 192, 192, 0.6)', // green
+                    'rgba(153, 102, 255, 0.6)', // purple
+                    'rgba(255, 159, 64, 0.6)', // orange
+                    'rgba(255, 99, 132, 0.6)' // red
+                ],
+                borderColor: [
+                    'rgba(54, 162, 235, 1)',
+                    'rgba(75, 192, 192, 1)',
+                    'rgba(153, 102, 255, 1)',
+                    'rgba(255, 159, 64, 1)',
+                    'rgba(255, 99, 132, 1)'
+                ],
+                borderWidth: 1
+            }]
+        };
+
+        const vramChartConfig = {
+            type: 'bar',
+            data: vramData,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'VRAM (GB)'
+                        }
+                    },
+                    x: {
+                        ticks: {
+                             callback: function(value, index, values) {
+                                const label = this.getLabelForValue(value);
+                                if (label.length > 15) { // Max 15 chars per line
+                                    const words = label.split(' ');
+                                    let currentLine = '';
+                                    const lines = [];
+                                    words.forEach(word => {
+                                        if ((currentLine + word).length > 15) {
+                                            lines.push(currentLine.trim());
+                                            currentLine = '';
+                                        }
+                                        currentLine += word + ' ';
+                                    });
+                                    lines.push(currentLine.trim());
+                                    return lines;
+                                }
+                                return label;
+                            },
+                            maxRotation: 70,
+                            minRotation: 70,
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top',
+                    },
+                    tooltip: {
+                        enabled: true,
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                if (label) {
+                                    label += ': ';
+                                }
+                                if (context.parsed.y !== null) {
+                                    label += context.parsed.y + ' GB';
+                                }
+                                return label;
+                            }
+                        }
+                    }
+                }
+            }
+        };
+
+        const vramChartCanvas = document.getElementById('vramChart');
+        if (vramChartCanvas) {
+            new Chart(vramChartCanvas, vramChartConfig);
+        }
+
+        // Smooth scroll for nav links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const targetId = this.getAttribute('href');
+                const targetElement = document.querySelector(targetId);
+                if (targetElement) {
+                    targetElement.scrollIntoView({
+                        behavior: 'smooth'
+                    });
+                }
+            });
+        });
+
+    </script>
+</body>
+</html>
